@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Instance — Cloud in a Bottle</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 1rem; background: #f5f5f5; color: #222; }
+  .card { max-width: 480px; margin: 4rem auto; background: #fff; border-radius: 8px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  h1 { font-size: 1.3rem; margin: 0 0 1rem; }
+  label { display: block; margin-bottom: 0.25rem; }
+  .row { display: flex; gap: 0.5rem; }
+  input[type="text"] { flex: 1; padding: 0.4rem 0.6rem; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+  button { padding: 0.4rem 1rem; font-size: 1rem; border: none; border-radius: 4px; background: #2563eb; color: #fff; cursor: pointer; }
+  button:hover { background: #1d4ed8; }
+  a { color: #2563eb; }
+  .forget { font-size: 0.85rem; margin-top: 0.75rem; }
+</style>
+</head>
+<body>
+<div class="card">
+    <h1 id="heading">my.cloudinabottle.org</h1>
+    <p>This is a static page that redirects to your instance. It's used to
+    enable things like OAuth flows that redirect back into your instance, or
+    links that can be published with a common URL that will redirect into each
+    user's individual instance. Only links under <code>/redirect/…</code>
+    are forwarded, and they land under the same <code>/redirect/…</code> path in
+    your instance — a reserved namespace of side-effect-free landing pages — so
+    published links can never point at arbitrary pages in your instance.</p>
+
+    <p>Your instance URL will be saved in your browser's local storage, and
+    this page makes no network requests other than redirecting you into your
+    instance.</p>
+
+    <p>Visiting <code id="bare-url">my.cloudinabottle.org</code> without any
+    additional URL arguments will land you back on this page if you need to
+    update your instance URL.</p>
+
+    <p>Don't have an instance yet? Get one at
+    <a href="https://cloudinabottle.org/">cloudinabottle.org</a>.</p>
+
+    <div id="form-section">
+        <p id="unknown-notice" hidden style="color: #b91c1c;">Unknown link —
+        only <code>/redirect/…</code> links are supported here.</p>
+        <label for="compute-url">Enter your instance URL:</label>
+        <div class="row">
+            <input type="text" id="compute-url" placeholder="https://xyz.bottle.cloud">
+        </div>
+        <p id="preview" style="margin: 0.75rem 0 0; word-break: break-all;">
+            Will redirect to: <a id="preview-url" href="#"></a>
+        </p>
+        <div style="margin-top: 0.75rem;">
+            <button id="go-btn">Save</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var STORAGE_KEY = "cloudinabottle_instance_url";
+
+    // Only /redirect/... paths are forwardable, and the full path (prefix
+    // included) is forwarded verbatim, so links can only land inside the
+    // instance's reserved /redirect/... namespace — never on arbitrary
+    // pages.
+    var loc = window.location;
+    var forward = "";
+    var unknown = false;
+    var path = loc.pathname;
+    if (path === "/" || path === "" || path === "/redirect" || path === "/redirect/") {
+        // No forward path: just show the settings form.
+    } else if (path.indexOf("/redirect/") === 0) {
+        forward = path + loc.search + loc.hash;
+    } else {
+        unknown = true;
+    }
+
+    var hostname = loc.hostname;
+    document.getElementById("heading").textContent = "my." + hostname.replace(/^my\./, "");
+    document.getElementById("bare-url").textContent = hostname;
+
+    if (unknown) {
+        document.getElementById("unknown-notice").hidden = false;
+    }
+
+    var saved = localStorage.getItem(STORAGE_KEY);
+    if (saved && forward) {
+        window.location.replace(saved + forward);
+        return;
+    }
+
+    var input = document.getElementById("compute-url");
+    var btn = document.getElementById("go-btn");
+    var preview = document.getElementById("preview");
+    var previewUrl = document.getElementById("preview-url");
+
+    if (saved) {
+        input.value = saved;
+    }
+
+    function updateButton() {
+        var dirty = normalizeUrl(input.value) !== saved;
+        if (!forward) {
+            btn.textContent = "Save";
+        } else if (dirty) {
+            btn.textContent = "Save and go";
+        } else {
+            btn.textContent = "Go";
+        }
+    }
+
+    function normalizeUrl(raw) {
+        var url = raw.trim().replace(/\/+$/, "");
+        if (!url) return "";
+        if (!/^https?:\/\//.test(url)) url = "https://" + url;
+        return url;
+    }
+
+    function updatePreview() {
+        var url = normalizeUrl(input.value);
+        var full = url ? url + forward : "";
+        if (full) {
+            previewUrl.textContent = full;
+            previewUrl.href = full;
+        } else {
+            previewUrl.textContent = "";
+            previewUrl.removeAttribute("href");
+        }
+    }
+
+    input.addEventListener("input", function() { updatePreview(); updateButton(); });
+    updatePreview();
+    updateButton();
+
+    function doRedirect() {
+        var url = normalizeUrl(input.value);
+        if (!url) return;
+        localStorage.setItem(STORAGE_KEY, url);
+        if (forward) {
+            window.location.replace(url + forward);
+        }
+    }
+
+    btn.addEventListener("click", doRedirect);
+    input.addEventListener("keydown", function(e) {
+        if (e.key === "Enter") doRedirect();
+    });
+})();
+</script>
+</body>
+</html>
